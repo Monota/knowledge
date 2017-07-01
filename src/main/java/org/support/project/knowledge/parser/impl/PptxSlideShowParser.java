@@ -1,16 +1,24 @@
 package org.support.project.knowledge.parser.impl;
 
 import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.FontFormatException;
 import java.awt.Graphics2D;
+import java.awt.GraphicsEnvironment;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.poi.EncryptedDocumentException;
+import org.apache.poi.sl.draw.Drawable;
 import org.apache.poi.sl.usermodel.Slide;
 import org.apache.poi.sl.usermodel.SlideShow;
 import org.apache.poi.sl.usermodel.SlideShowFactory;
@@ -34,9 +42,18 @@ public class PptxSlideShowParser extends AbstractSlideShowParser implements Slid
             for (Slide<?, ?> slide : slides) {
                 String title = slide.getTitle();
                 System.out.println("Rendering slide " + slideNo + (title == null ? "" : ": " + title));
-
+                GraphicsEnvironment globalEnvironment = GraphicsEnvironment.getLocalGraphicsEnvironment();
+                try (InputStream is = ClassLoader.getSystemResourceAsStream("font/ipagp.ttf")) {
+                    Font font = Font.createFont(Font.TRUETYPE_FONT, is);
+                    globalEnvironment.registerFont(font);
+                } catch (FontFormatException ffe) {
+                    ffe.printStackTrace();
+                }
+                Map<String,String> fallbackMap = new HashMap<String,String>();
+                fallbackMap.put("*", "IPAPGothic");
                 BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
                 Graphics2D graphics = img.createGraphics();
+                graphics.setRenderingHint(Drawable.FONT_FALLBACK, fallbackMap);
                 graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
                 graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
