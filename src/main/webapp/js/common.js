@@ -69,7 +69,7 @@ $(document).on('drop dragover', function (e) {
 });
 
 function logging(str, level) {
-//    console.log(str);
+    console.log(str);
     if (_LOGGING_NOTIFY_DESKTOP) {
         if (!level) {
             level = 'info';
@@ -104,13 +104,8 @@ function isString(obj) {
 };
 
 function unescapeHTML(str) {
-    var div = document.createElement("div");
-    div.innerHTML = str.replace(/</g,"&lt;")
-                       .replace(/>/g,"&gt;")
-                       .replace(/ /g, "&nbsp;")
-                       .replace(/\r/g, "&#13;")
-                       .replace(/\n/g, "&#10;");
-    return div.textContent || div.innerText;
+    // エスケープしない
+    return str;
 };
 
 function escapeLink(url) {
@@ -145,4 +140,35 @@ var handleErrorResponse = function(xhr, textStatus, error) {
             $.notify('data load error. please try again.', 'warn');
         }
     }
+};
+
+var getCookies = function() {
+    var result = new Array();
+    var allcookies = document.cookie;
+    if( allcookies != '' ) {
+        var cookies = allcookies.split( '; ' );
+        for( var i = 0; i < cookies.length; i++ ) {
+            var cookie = cookies[ i ].split( '=' );
+            result[ cookie[ 0 ] ] = decodeURIComponent( cookie[ 1 ] );
+        }
+    }
+    return result;
+};
+
+var setCookie = function(c_name, value, expiredays, path) {
+    var extime = new Date().getTime();
+    var cltime = new Date(extime + (60 * 60 * 24 * 1000 * expiredays));
+    var exdate = cltime.toUTCString();
+    var s = '';
+    s += c_name + '=' + escape(value) + ';';
+    if (expiredays) {
+        s += ' expires=' + exdate + ';';
+    }
+    if (path) {
+        s += ' path=' + path + ';';
+    } else {
+        s += ' path=' + _CONTEXT + '/;';
+    }
+    
+    document.cookie = s;
 };

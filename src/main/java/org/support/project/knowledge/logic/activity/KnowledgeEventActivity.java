@@ -6,7 +6,7 @@ import org.support.project.common.util.RandomUtil;
 import org.support.project.di.Container;
 import org.support.project.di.DI;
 import org.support.project.di.Instance;
-import org.support.project.knowledge.dao.ParticipantsDao;
+import org.support.project.knowledge.dao.ActivitiesDao;
 
 /**
  * 
@@ -30,8 +30,9 @@ public class KnowledgeEventActivity extends AbstractAddPointForKnowledgeProcesso
             return point;
         }
         // 参加者人数により増減
-        int point = 10;
-        long count = ParticipantsDao.get().selectUniqueUserCountOnKnowledgeId(getKnowledge().getKnowledgeId());
+        int point = 5;
+        long count = ActivitiesDao.get().selectCountByTarget(
+                getActivity().getValue(), getKnowledge().getKnowledgeId());
         int add = 0;
         if (count > 100) {
             add = 1000;
@@ -42,6 +43,9 @@ public class KnowledgeEventActivity extends AbstractAddPointForKnowledgeProcesso
             int[] points = {1,1,1,1,1,2,2,2,2,3};
             add += points[RandomUtil.randamNum(0, 10)]; // ランダムで値が増減するボーナスポイント
         }
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("[Bonus point]: " + add + " [COUNT]:" + count);
+        }
         point += add;
         this.point = point;
         return point;
@@ -50,8 +54,8 @@ public class KnowledgeEventActivity extends AbstractAddPointForKnowledgeProcesso
 
     @Override
     protected Activity getActivity() {
-        LOG.debug("Start add point process on answer knowledge.");
-        return Activity.KNOWLEDGE_ANSWER;
+        LOG.debug("Start add point process on event knowledge.");
+        return Activity.KNOWLEDGE_EVENT_ADD;
     }
     @Override
     protected TypeAndPoint getTypeAndPointForActivityExecuter() {
@@ -66,9 +70,6 @@ public class KnowledgeEventActivity extends AbstractAddPointForKnowledgeProcesso
     }
     @Override
     protected TypeAndPoint getTypeAndPointForKnowledge() {
-        if (eventUser.getUserId().intValue() == getKnowledge().getInsertUser().intValue()) {
-            return null;
-        }
         return new TypeAndPoint(TYPE_KNOWLEDGE_JOINED, getPoint());
     }
 

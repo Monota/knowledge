@@ -4,22 +4,26 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.support.project.common.exception.ParseException;
 import org.support.project.common.log.Log;
 import org.support.project.common.log.LogFactory;
+import org.support.project.common.util.DateUtils;
+import org.support.project.common.util.StringJoinBuilder;
 import org.support.project.common.util.StringUtils;
 import org.support.project.di.DI;
 import org.support.project.di.Instance;
 import org.support.project.knowledge.config.AppConfig;
 import org.support.project.knowledge.config.SystemConfig;
+import org.support.project.knowledge.config.UserConfig;
 import org.support.project.knowledge.control.KnowledgeControlBase;
 import org.support.project.knowledge.dao.CommentsDao;
 import org.support.project.knowledge.dao.DraftItemValuesDao;
 import org.support.project.knowledge.dao.ExGroupsDao;
+import org.support.project.knowledge.dao.ExUsersDao;
 import org.support.project.knowledge.dao.KnowledgeHistoriesDao;
 import org.support.project.knowledge.dao.KnowledgeItemValuesDao;
 import org.support.project.knowledge.dao.KnowledgesDao;
@@ -44,6 +48,7 @@ import org.support.project.knowledge.logic.EventsLogic;
 import org.support.project.knowledge.logic.GroupLogic;
 import org.support.project.knowledge.logic.KeywordLogic;
 import org.support.project.knowledge.logic.KnowledgeLogic;
+import org.support.project.knowledge.logic.LikeLogic;
 import org.support.project.knowledge.logic.MarkdownLogic;
 import org.support.project.knowledge.logic.TagLogic;
 import org.support.project.knowledge.logic.TargetLogic;
@@ -66,9 +71,11 @@ import org.support.project.web.common.HttpUtil;
 import org.support.project.web.control.service.Get;
 import org.support.project.web.control.service.Post;
 import org.support.project.web.dao.SystemConfigsDao;
+import org.support.project.web.dao.UserConfigsDao;
 import org.support.project.web.dao.UsersDao;
 import org.support.project.web.entity.GroupsEntity;
 import org.support.project.web.entity.SystemConfigsEntity;
+import org.support.project.web.entity.UserConfigsEntity;
 import org.support.project.web.entity.UsersEntity;
 import org.support.project.web.exception.InvalidParamException;
 
@@ -218,7 +225,10 @@ public class KnowledgeControl extends KnowledgeControlBase {
         List<StocksEntity> stocks = StocksDao.get().selectStockOnKnowledge(entity, loginedUser);
         setAttribute("stocks", stocks);
         
-        ActivityLogic.get().processActivity(Activity.KNOWLEDGE_SHOW, getLoginedUser(), new Date(), entity);
+        UserConfigsEntity stealth = UserConfigsDao.get().selectOnKey(UserConfig.STEALTH_ACCESS, AppConfig.get().getSystemName(), getLoginUserId());
+        if (stealth == null || !"1".equals(stealth.getConfigValue())) {
+            ActivityLogic.get().processActivity(Activity.KNOWLEDGE_SHOW, getLoginedUser(), DateUtils.now(), entity);
+        }
         long point = KnowledgesDao.get().selectPoint(entity.getKnowledgeId());
         setAttribute("point", point);
         
@@ -228,7 +238,7 @@ public class KnowledgeControl extends KnowledgeControlBase {
     /**
      * ナレッジの公開先の情報を取得
      * @param loginedUser
-     * @param knowledgeIds
+     * @param knowledges
      */
     private void setKnowledgeTargetsWithConv(LoginedUser loginedUser, List<KnowledgesEntity> knowledges) {
         ArrayList<Long> knowledgeIds = new ArrayList<>();
@@ -278,8 +288,8 @@ public class KnowledgeControl extends KnowledgeControlBase {
         }
         LOG.trace("タグ、グループ取得完了");
         
-        List<TemplateMastersEntity> templateList = TemplateMastersDao.get().selectAll();
-        Map<Integer, TemplateMastersEntity> templates = new HashMap<>();
+        List<TemplateMastersEntity> templateList = TemplateLogic.get().selectAll();
+        Map<Integer, TemplateMastersEntity> templates = new LinkedHashMap<>();
         for (TemplateMastersEntity templateMastersEntity : templateList) {
             templates.put(templateMastersEntity.getTypeId(), templateMastersEntity);
         }
@@ -338,7 +348,50 @@ public class KnowledgeControl extends KnowledgeControlBase {
         String user = getParam("user");
         String tagNames = getParam("tagNames");
         String groupNames = getParam("groupNames");
-        String template = getParam("template");
+        String creators = getParam("creators");
+        String[] templates = getParam("template", String[].class);
+
+        boolean hiddenFilter = false;
+        if ("quickFilter".equals(getParam("from"))) {
+            if (templates == null) {
+                templates = new String[0];
+            }
+            hiddenFilter = true;
+            if (getLoginedUser() != null && getLoginUserId() != Integer.MIN_VALUE) {
+                UserConfigsEntity config = UserConfigsDao.get().selectOnKey("LIST_FILTERS", AppConfig.get().getSystemName(), getLoginUserId());
+                // Filterの設定を変更した
+                if (config == null) {
+                    config = new UserConfigsEntity();
+                    config.setSystemName(AppConfig.get().getSystemName());
+                    config.setConfigName("LIST_FILTERS");
+                    config.setUserId(getLoginUserId());
+                }
+                StringJoinBuilder<String> builder = new StringJoinBuilder<>();
+                for (String template : templates) {
+                    builder.append(template);
+                }
+                String value = builder.join(",");
+                if (!value.equals(config.getConfigValue())) {
+                    config.setConfigValue(value);
+                    UserConfigsDao.get().save(config);
+                }
+            }
+            setAttribute("params", ""); // Filterの設定変更の場合は、検索パラメータをクリア
+        } else {
+            if (getLoginedUser() != null && getLoginUserId() != Integer.MIN_VALUE) {
+                UserConfigsEntity config = UserConfigsDao.get().selectOnKey("LIST_FILTERS", AppConfig.get().getSystemName(), getLoginUserId());
+                if (templates == null) {
+                    // 検索画面からきていない
+                    if (config != null) {
+                        templates = config.getConfigValue().split(",");
+                    }
+                    // フィルタの条件を変更していないので、フィルタは表示しない
+                    if (StringUtils.isEmpty(keyword)) {
+                        hiddenFilter = true;
+                    }
+                }
+            }
+        }
 
         String keywordSortTypeString = getCookie(SystemConfig.COOKIE_KEY_KEYWORD_SORT_TYPE);
         int keywordSortType;
@@ -436,7 +489,7 @@ public class KnowledgeControl extends KnowledgeControlBase {
                 setAttribute("selectedGroupIds", groupIds);
                 setAttribute("searchKeyword", searchKeyword + keyword);
     
-                knowledges.addAll(knowledgeLogic.searchKnowledge(keyword, tags, groups, template, loginedUser, offset * PAGE_LIMIT, PAGE_LIMIT));
+                knowledges.addAll(knowledgeLogic.searchKnowledge(keyword, tags, groups, null, templates, loginedUser, offset * PAGE_LIMIT, PAGE_LIMIT));
             } else {
                 // その他(キーワード検索)
                 LOG.trace("search");
@@ -478,17 +531,40 @@ public class KnowledgeControl extends KnowledgeControlBase {
                 keyword = keywordLogic.parseKeyword(keyword);
     
                 setAttribute("keyword", keyword);
-                knowledges.addAll(knowledgeLogic.searchKnowledge(keyword, tags, groups, template, loginedUser, offset * PAGE_LIMIT, PAGE_LIMIT));
+                
+                List <UsersEntity> creatorUserEntities = new ArrayList<>();
+                if (StringUtils.isNotEmpty(creators)) {
+                    String[] creatorsArray = creators.split(",");
+                    for (String userName : creatorsArray) {
+                        List<UsersEntity> users = ExUsersDao.get().selectByUserName(userName);
+                        creatorUserEntities.addAll(users);
+                    }
+                }
+                setAttribute("creators", creatorUserEntities);
+                
+                knowledges.addAll(knowledgeLogic.searchKnowledge(keyword, tags, groups, creatorUserEntities, templates, loginedUser, offset * PAGE_LIMIT, PAGE_LIMIT));
             }
     
             List<StockKnowledge> stocks = knowledgeLogic.setStockInfo(knowledges, loginedUser);
             KnowledgeLogic.get().setViewed(stocks, getLoginedUser());
             setAttribute("knowledges", stocks);
             LOG.trace("検索終了");
-            
-            if (StringUtils.isNotEmpty(template) && StringUtils.isInteger(template)) {
-                TemplateMastersEntity templateMastersEntity = TemplateMastersDao.get().selectOnKey(new Integer(template));
-                setAttribute("type", templateMastersEntity);
+
+            if (templates != null) {
+                List<TemplateMastersEntity> templateItems = new ArrayList<>();
+                for (String template: templates) {
+                    if (StringUtils.isNotEmpty(template) && StringUtils.isInteger(template)) {
+                        TemplateMastersEntity templateMastersEntity = TemplateMastersDao.get().selectOnKey(new Integer(template));
+                        templateItems.add(templateMastersEntity);
+                    }
+                }
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug(templateItems);
+                }
+                if (!hiddenFilter) {
+                    setAttribute("types", templateItems);
+                }
+                setAttribute("selectedTemplates", templateItems);
             }
             // ナレッジの公開先の情報を取得
             setKnowledgeTargetsWithConv(loginedUser, knowledges);
@@ -657,17 +733,13 @@ public class KnowledgeControl extends KnowledgeControlBase {
      * @return
      * @throws InvalidParamException
      */
-    @Post
+    @Post(subscribeToken="knowledge")
     public Boundary like() throws InvalidParamException {
         Long knowledgeId = super.getPathLong(Long.valueOf(-1));
-        KnowledgeLogic knowledgeLogic = KnowledgeLogic.get();
-        Long count = knowledgeLogic.addLike(knowledgeId, getLoginedUser(), getLocale());
+        Long count = LikeLogic.get().addLike(knowledgeId, getLoginedUser(), getLocale());
         LikeCount likeCount = new LikeCount();
         likeCount.setKnowledgeId(knowledgeId);
         likeCount.setCount(count);
-        
-        ActivityLogic.get().processActivity(Activity.KNOWLEDGE_LIKE, getLoginedUser(), new Date(),
-                KnowledgesDao.get().selectOnKey(knowledgeId));
         return send(likeCount);
     }
     /**
@@ -675,16 +747,12 @@ public class KnowledgeControl extends KnowledgeControlBase {
      * @return
      * @throws InvalidParamException 
      */
-    @Post
+    @Post(subscribeToken="knowledge")
     public Boundary likecomment() throws InvalidParamException {
         Long commentNo = super.getPathLong(Long.valueOf(-1));
-        KnowledgeLogic knowledgeLogic = KnowledgeLogic.get();
-        Long count = knowledgeLogic.addLikeComment(commentNo, getLoginedUser(), getLocale());
+        Long count = LikeLogic.get().addLikeComment(commentNo, getLoginedUser(), getLocale());
         LikeCount likeCount = new LikeCount();
         likeCount.setCount(count);
-        
-        ActivityLogic.get().processActivity(Activity.COMMENT_LIKE, getLoginedUser(), new Date(),
-                CommentsDao.get().selectOnKey(commentNo));
         return send(likeCount);
     }
 
@@ -695,7 +763,7 @@ public class KnowledgeControl extends KnowledgeControlBase {
      * @return
      * @throws ParseException
      */
-    @Post
+    @Post(subscribeToken = "")
     public Boundary escape(KnowledgesEntity entity) throws ParseException {
         super.setSendEscapeHtml(false);
         entity.setTitle(sanitize(entity.getTitle()));
@@ -710,7 +778,7 @@ public class KnowledgeControl extends KnowledgeControlBase {
      * @return
      * @throws ParseException
      */
-    @Post
+    @Post(subscribeToken = "")
     public Boundary marked(KnowledgesEntity entity) throws ParseException {
         super.setSendEscapeHtml(false);
         entity.setTitle(sanitize(entity.getTitle()));

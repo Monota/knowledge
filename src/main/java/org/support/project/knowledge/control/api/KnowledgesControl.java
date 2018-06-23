@@ -18,6 +18,7 @@ import org.support.project.web.bean.NameId;
 import org.support.project.web.boundary.Boundary;
 import org.support.project.web.common.HttpStatus;
 import org.support.project.web.control.ApiControl;
+import org.support.project.web.control.GetApiControl;
 import org.support.project.web.control.service.Delete;
 import org.support.project.web.control.service.Get;
 import org.support.project.web.control.service.Post;
@@ -28,11 +29,11 @@ import org.support.project.web.filter.ControlManagerFilter;
 import net.arnx.jsonic.JSONException;
 
 @DI(instance = Instance.Prototype)
-public class KnowledgesControl extends ApiControl {
+public class KnowledgesControl extends GetApiControl {
     /** ログ */
     private static Log LOG = LogFactory.getLog(ControlManagerFilter.class);
     
-    @Get(path="api/knowledges")
+    @Get(path="api/knowledges", publishToken="")
     public Boundary index() {
         return get();
     }
@@ -71,7 +72,7 @@ public class KnowledgesControl extends ApiControl {
     /**
      * Post knowledges
      */
-    @Post(path="api/knowledges", checkReferer=false)
+    @Post(path="api/knowledges", checkReferer=false, subscribeToken="")
     public Boundary post() {
         try {
             KnowledgeDetail data = getJsonObject(KnowledgeDetail.class);
@@ -91,7 +92,7 @@ public class KnowledgesControl extends ApiControl {
     /**
      * Put knowledges
      */
-    @Put(path="api/knowledges", checkReferer=false)
+    @Put(path="api/knowledges", checkReferer=false, subscribeToken="")
     public Boundary put() {
         try {
             Long id = getPathLong();
@@ -114,7 +115,7 @@ public class KnowledgesControl extends ApiControl {
     /**
      * Delete knowledges
      */
-    @Delete(path="api/knowledges", checkReferer=false)
+    @Delete(path="api/knowledges", checkReferer=false, subscribeToken="")
     public Boundary delete() {
         try {
             Long id = getPathLong();

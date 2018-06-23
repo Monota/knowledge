@@ -15,6 +15,7 @@ import org.support.project.ormapping.config.ORMappingParameter;
 import org.support.project.ormapping.config.Order;
 import org.support.project.ormapping.connection.ConnectionManager;
 import org.support.project.common.util.PropertyUtil;
+import org.support.project.common.util.DateUtils;
 
 import org.support.project.di.Container;
 import org.support.project.di.DI;
@@ -175,6 +176,8 @@ public class GenWebhookConfigsDao extends AbstractDao {
             entity.getHookId(), 
             entity.getHook(), 
             entity.getUrl(), 
+            entity.getIgnoreProxy(), 
+            entity.getTemplate(), 
             entity.getInsertUser(), 
             entity.getInsertDatetime(), 
             entity.getUpdateUser(), 
@@ -205,6 +208,8 @@ public class GenWebhookConfigsDao extends AbstractDao {
         Object key = executeInsert(sql, type, 
             entity.getHook(), 
             entity.getUrl(), 
+            entity.getIgnoreProxy(), 
+            entity.getTemplate(), 
             entity.getInsertUser(), 
             entity.getInsertDatetime(), 
             entity.getUpdateUser(), 
@@ -223,9 +228,9 @@ public class GenWebhookConfigsDao extends AbstractDao {
     @Aspect(advice = org.support.project.ormapping.transaction.Transaction.class)
     public WebhookConfigsEntity insert(Integer user, WebhookConfigsEntity entity) {
         entity.setInsertUser(user);
-        entity.setInsertDatetime(new Timestamp(new java.util.Date().getTime()));
+        entity.setInsertDatetime(new Timestamp(DateUtils.now().getTime()));
         entity.setUpdateUser(user);
-        entity.setUpdateDatetime(new Timestamp(new java.util.Date().getTime()));
+        entity.setUpdateDatetime(new Timestamp(DateUtils.now().getTime()));
         entity.setDeleteFlag(0);
         return physicalInsert(entity);
     }
@@ -252,6 +257,8 @@ public class GenWebhookConfigsDao extends AbstractDao {
         executeUpdate(sql, 
             entity.getHook(), 
             entity.getUrl(), 
+            entity.getIgnoreProxy(), 
+            entity.getTemplate(), 
             entity.getInsertUser(), 
             entity.getInsertDatetime(), 
             entity.getUpdateUser(), 
@@ -274,7 +281,7 @@ public class GenWebhookConfigsDao extends AbstractDao {
         entity.setInsertDatetime(db.getInsertDatetime());
         entity.setDeleteFlag(db.getDeleteFlag());
         entity.setUpdateUser(user);
-        entity.setUpdateDatetime(new Timestamp(new java.util.Date().getTime()));
+        entity.setUpdateDatetime(new Timestamp(DateUtils.now().getTime()));
         return physicalUpdate(entity);
     }
     /**
@@ -351,7 +358,7 @@ public class GenWebhookConfigsDao extends AbstractDao {
         WebhookConfigsEntity db = selectOnKey(hookId);
         db.setDeleteFlag(1);
         db.setUpdateUser(user);
-        db.setUpdateDatetime(new Timestamp(new java.util.Date().getTime()));
+        db.setUpdateDatetime(new Timestamp(DateUtils.now().getTime()));
         physicalUpdate(db);
     }
     /**
@@ -400,7 +407,7 @@ public class GenWebhookConfigsDao extends AbstractDao {
         WebhookConfigsEntity db = physicalSelectOnKey(hookId);
         db.setDeleteFlag(0);
         db.setUpdateUser(user);
-        db.setUpdateDatetime(new Timestamp(new java.util.Date().getTime()));
+        db.setUpdateDatetime(new Timestamp(DateUtils.now().getTime()));
         physicalUpdate(db);
     }
     /**

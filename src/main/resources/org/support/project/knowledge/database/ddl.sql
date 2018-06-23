@@ -1,3 +1,36 @@
+-- いいねの通知状態
+drop table if exists NOTIFICATION_STATUS cascade;
+
+create table NOTIFICATION_STATUS (
+  TYPE integer not null
+  , TARGET_ID bigint not null
+  , USER_ID integer not null
+  , STATUS integer
+  , INSERT_USER integer
+  , INSERT_DATETIME timestamp
+  , UPDATE_USER integer
+  , UPDATE_DATETIME timestamp
+  , DELETE_FLAG integer
+  , constraint NOTIFICATION_STATUS_PKC primary key (TYPE,TARGET_ID,USER_ID)
+) ;
+
+-- メールから投稿の際の除外条件
+drop table if exists MAIL_HOOK_IGNORE_CONDITIONS cascade;
+
+create table MAIL_HOOK_IGNORE_CONDITIONS (
+  HOOK_ID INTEGER not null
+  , CONDITION_NO integer not null
+  , IGNORE_CONDITION_NO integer not null
+  , CONDITION_KIND integer not null
+  , CONDITION character varying(256)
+  , INSERT_USER integer
+  , INSERT_DATETIME timestamp
+  , UPDATE_USER integer
+  , UPDATE_DATETIME timestamp
+  , DELETE_FLAG integer
+  , constraint MAIL_HOOK_IGNORE_CONDITIONS_PKC primary key (HOOK_ID,CONDITION_NO,IGNORE_CONDITION_NO)
+) ;
+
 -- ユーザのポイント獲得履歴
 drop table if exists POINT_USER_HISTORIES cascade;
 
@@ -363,6 +396,8 @@ create table WEBHOOK_CONFIGS (
   HOOK_ID serial not null
   , HOOK character varying(20) not null
   , URL character varying(256) not null
+  , IGNORE_PROXY integer
+  , TEMPLATE text
   , INSERT_USER integer
   , INSERT_DATETIME timestamp
   , UPDATE_USER integer
@@ -860,6 +895,29 @@ create table KNOWLEDGES (
   , constraint KNOWLEDGES_PKC primary key (KNOWLEDGE_ID)
 ) ;
 
+comment on table NOTIFICATION_STATUS is 'いいねの通知状態';
+comment on column NOTIFICATION_STATUS.TYPE is '種類';
+comment on column NOTIFICATION_STATUS.TARGET_ID is 'ターゲットのID';
+comment on column NOTIFICATION_STATUS.USER_ID is '登録者';
+comment on column NOTIFICATION_STATUS.STATUS is '通知の状態';
+comment on column NOTIFICATION_STATUS.INSERT_USER is '登録ユーザ';
+comment on column NOTIFICATION_STATUS.INSERT_DATETIME is '登録日時';
+comment on column NOTIFICATION_STATUS.UPDATE_USER is '更新ユーザ';
+comment on column NOTIFICATION_STATUS.UPDATE_DATETIME is '更新日時';
+comment on column NOTIFICATION_STATUS.DELETE_FLAG is '削除フラグ';
+
+comment on table MAIL_HOOK_IGNORE_CONDITIONS is 'メールから投稿の際の除外条件';
+comment on column MAIL_HOOK_IGNORE_CONDITIONS.HOOK_ID is 'HOOK_ID';
+comment on column MAIL_HOOK_IGNORE_CONDITIONS.CONDITION_NO is 'CONDITION_NO';
+comment on column MAIL_HOOK_IGNORE_CONDITIONS.IGNORE_CONDITION_NO is 'IGNORE_CONDITION_NO';
+comment on column MAIL_HOOK_IGNORE_CONDITIONS.CONDITION_KIND is '条件の種類	 1:宛先が「条件文字」であった場合';
+comment on column MAIL_HOOK_IGNORE_CONDITIONS.CONDITION is '条件の文字';
+comment on column MAIL_HOOK_IGNORE_CONDITIONS.INSERT_USER is '登録ユーザ';
+comment on column MAIL_HOOK_IGNORE_CONDITIONS.INSERT_DATETIME is '登録日時';
+comment on column MAIL_HOOK_IGNORE_CONDITIONS.UPDATE_USER is '更新ユーザ';
+comment on column MAIL_HOOK_IGNORE_CONDITIONS.UPDATE_DATETIME is '更新日時';
+comment on column MAIL_HOOK_IGNORE_CONDITIONS.DELETE_FLAG is '削除フラグ';
+
 comment on table POINT_USER_HISTORIES is 'ユーザのポイント獲得履歴';
 comment on column POINT_USER_HISTORIES.USER_ID is 'ユーザID';
 comment on column POINT_USER_HISTORIES.HISTORY_NO is '履歴番号';
@@ -1028,7 +1086,7 @@ comment on column SURVEYS.DELETE_FLAG is '削除フラグ';
 
 comment on table EVENTS is 'イベント';
 comment on column EVENTS.KNOWLEDGE_ID is 'ナレッジID';
-comment on column EVENTS.START_DATE_TIME is '開催日     UTC';
+comment on column EVENTS.START_DATE_TIME is '開催日	 UTC';
 comment on column EVENTS.TIME_ZONE is 'タイムゾーン';
 comment on column EVENTS.NOTIFY_STATUS is '通知ステータス';
 comment on column EVENTS.INSERT_USER is '登録ユーザ';
@@ -1093,6 +1151,8 @@ comment on table WEBHOOK_CONFIGS is 'Webhook 設定';
 comment on column WEBHOOK_CONFIGS.HOOK_ID is 'HOOK ID';
 comment on column WEBHOOK_CONFIGS.HOOK is 'HOOK';
 comment on column WEBHOOK_CONFIGS.URL is 'URL';
+comment on column WEBHOOK_CONFIGS.IGNORE_PROXY is 'IGNORE_PROXY';
+comment on column WEBHOOK_CONFIGS.TEMPLATE is 'TEMPLATE';
 comment on column WEBHOOK_CONFIGS.INSERT_USER is '登録ユーザ';
 comment on column WEBHOOK_CONFIGS.INSERT_DATETIME is '登録日時';
 comment on column WEBHOOK_CONFIGS.UPDATE_USER is '更新ユーザ';
@@ -1129,7 +1189,7 @@ comment on column DRAFT_KNOWLEDGES.DELETE_FLAG is '削除フラグ';
 
 comment on table MAIL_POSTS is 'メールから投稿';
 comment on column MAIL_POSTS.MESSAGE_ID is 'Message-ID';
-comment on column MAIL_POSTS.POST_KIND is '投稿区分  1: Knowledge 2:Comment';
+comment on column MAIL_POSTS.POST_KIND is '投稿区分	 1: Knowledge 2:Comment';
 comment on column MAIL_POSTS.ID is 'ID';
 comment on column MAIL_POSTS.SENDER is 'SENDER';
 comment on column MAIL_POSTS.INSERT_USER is '登録ユーザ';
@@ -1141,10 +1201,10 @@ comment on column MAIL_POSTS.DELETE_FLAG is '削除フラグ';
 comment on table MAIL_HOOK_CONDITIONS is 'メールから投稿する条件';
 comment on column MAIL_HOOK_CONDITIONS.HOOK_ID is 'HOOK_ID';
 comment on column MAIL_HOOK_CONDITIONS.CONDITION_NO is 'CONDITION_NO';
-comment on column MAIL_HOOK_CONDITIONS.CONDITION_KIND is '条件の種類  1:宛先が「条件文字」であった場合';
+comment on column MAIL_HOOK_CONDITIONS.CONDITION_KIND is '条件の種類	 1:宛先が「条件文字」であった場合';
 comment on column MAIL_HOOK_CONDITIONS.CONDITION is '条件の文字';
 comment on column MAIL_HOOK_CONDITIONS.PROCESS_USER is '投稿者';
-comment on column MAIL_HOOK_CONDITIONS.PROCESS_USER_KIND is '投稿者の指定  1:送信者のメールアドレスから、2:常に固定';
+comment on column MAIL_HOOK_CONDITIONS.PROCESS_USER_KIND is '投稿者の指定	 1:送信者のメールアドレスから、2:常に固定';
 comment on column MAIL_HOOK_CONDITIONS.PUBLIC_FLAG is '公開区分';
 comment on column MAIL_HOOK_CONDITIONS.TAGS is 'タグ';
 comment on column MAIL_HOOK_CONDITIONS.VIEWERS is '公開先';

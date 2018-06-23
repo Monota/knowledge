@@ -28,6 +28,7 @@ import org.support.project.knowledge.logic.KnowledgeLogic;
 import org.support.project.knowledge.logic.MailLogic;
 import org.support.project.knowledge.logic.NotificationLogic;
 import org.support.project.knowledge.logic.NotifyLogic;
+import org.support.project.knowledge.logic.notification.webhook.KnowledgeLikedWebHookNotification;
 import org.support.project.knowledge.vo.notification.LikeInsert;
 import org.support.project.web.bean.LoginedUser;
 import org.support.project.web.bean.MessageResult;
@@ -90,7 +91,13 @@ public class LikeInsertNotification extends AbstractQueueNotification implements
             LOG.warn("Like record not found. id: " + notifyQueue.getId());
             return;
         }
-
+        
+        // Webhook通知
+        KnowledgeLikedWebHookNotification webhook = KnowledgeLikedWebHookNotification.get();
+        webhook.init(like);
+        webhook.saveWebhookData();
+        
+        // 同一ユーザでは、イイネの通知は１回きりにする
         KnowledgesDao knowledgesDao = KnowledgesDao.get();
         KnowledgesEntity knowledge = knowledgesDao.selectOnKey(like.getKnowledgeId());
         if (null == knowledge) {

@@ -3,16 +3,14 @@ package org.support.project.knowledge.logic;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 import org.support.project.aop.Aspect;
-import org.support.project.common.config.Resources;
 import org.support.project.common.log.Log;
 import org.support.project.common.log.LogFactory;
+import org.support.project.common.util.DateUtils;
 import org.support.project.common.util.HtmlUtils;
 import org.support.project.common.util.PropertyUtil;
 import org.support.project.common.util.StringJoinBuilder;
@@ -21,7 +19,6 @@ import org.support.project.di.Container;
 import org.support.project.di.DI;
 import org.support.project.di.Instance;
 import org.support.project.knowledge.bat.FileParseBat;
-import org.support.project.knowledge.config.AppConfig;
 import org.support.project.knowledge.config.IndexType;
 import org.support.project.knowledge.config.SystemConfig;
 import org.support.project.knowledge.dao.CommentsDao;
@@ -37,7 +34,6 @@ import org.support.project.knowledge.dao.KnowledgeItemValuesDao;
 import org.support.project.knowledge.dao.KnowledgeTagsDao;
 import org.support.project.knowledge.dao.KnowledgeUsersDao;
 import org.support.project.knowledge.dao.KnowledgesDao;
-import org.support.project.knowledge.dao.LikeCommentsDao;
 import org.support.project.knowledge.dao.LikesDao;
 import org.support.project.knowledge.dao.StockKnowledgesDao;
 import org.support.project.knowledge.dao.StocksDao;
@@ -56,14 +52,14 @@ import org.support.project.knowledge.entity.KnowledgeItemValuesEntity;
 import org.support.project.knowledge.entity.KnowledgeTagsEntity;
 import org.support.project.knowledge.entity.KnowledgeUsersEntity;
 import org.support.project.knowledge.entity.KnowledgesEntity;
-import org.support.project.knowledge.entity.LikeCommentsEntity;
-import org.support.project.knowledge.entity.LikesEntity;
 import org.support.project.knowledge.entity.StocksEntity;
 import org.support.project.knowledge.entity.TagsEntity;
 import org.support.project.knowledge.entity.TemplateItemsEntity;
 import org.support.project.knowledge.entity.TemplateMastersEntity;
 import org.support.project.knowledge.entity.ViewHistoriesEntity;
 import org.support.project.knowledge.indexer.IndexingValue;
+import org.support.project.knowledge.logic.activity.Activity;
+import org.support.project.knowledge.logic.activity.ActivityLogic;
 import org.support.project.knowledge.logic.hook.AfterSaveHook;
 import org.support.project.knowledge.logic.hook.BeforeSaveHook;
 import org.support.project.knowledge.logic.hook.HookFactory;
@@ -73,14 +69,9 @@ import org.support.project.knowledge.vo.KnowledgeData;
 import org.support.project.knowledge.vo.StockKnowledge;
 import org.support.project.web.bean.LabelValue;
 import org.support.project.web.bean.LoginedUser;
-import org.support.project.web.bean.MessageResult;
-import org.support.project.web.common.HttpStatus;
-import org.support.project.web.config.MessageStatus;
-import org.support.project.web.dao.SystemConfigsDao;
 import org.support.project.web.entity.GroupsEntity;
-import org.support.project.web.entity.SystemConfigsEntity;
+import org.support.project.web.entity.UsersEntity;
 import org.support.project.web.exception.AuthenticateException;
-import org.support.project.web.exception.InvalidParamException;
 
 /**
  * Logic class for knowledge data
@@ -229,6 +220,10 @@ public class KnowledgeLogic {
         for (AfterSaveHook afterSaveHook : afterSaveHooks) {
             afterSaveHook.afterSave(data, loginedUser);
         }
+        
+        // CPの処理
+        ActivityLogic.get().processKnowledgeSaveActivity(loginedUser, DateUtils.now(), insertedEntity);
+        
         return insertedEntity;
     }
 
@@ -251,6 +246,7 @@ public class KnowledgeLogic {
 
         // ナレッッジを更新
         data.getKnowledge().setNotifyStatus(db.getNotifyStatus()); // 通知フラグはDBの値を引き継ぐ
+        data.getKnowledge().setPoint(db.getPoint()); // ポイントもDBの値を引き継ぐ
         KnowledgesEntity updatedEntity = knowledgesDao.update(data.getKnowledge());
         // ユーザのアクセス権を解除
         knowledgeUsersDao.deleteOnKnowledgeId(updatedEntity.getKnowledgeId());
@@ -309,6 +305,10 @@ public class KnowledgeLogic {
         for (AfterSaveHook afterSaveHook : afterSaveHooks) {
             afterSaveHook.afterSave(data, loginedUser);
         }
+        
+        // CP
+        ActivityLogic.get().processKnowledgeSaveActivity(loginedUser, DateUtils.now(), updatedEntity);
+        
         return updatedEntity;
     }
 
@@ -529,13 +529,15 @@ public class KnowledgeLogic {
      * @param keyword
      * @param tags
      * @param groups
+     * @param creators 
      * @param loginedUser
      * @param offset
      * @param limit
      * @return
      * @throws Exception
      */
-    public List<KnowledgesEntity> searchKnowledge(String keyword, List<TagsEntity> tags, List<GroupsEntity> groups, String template, LoginedUser loginedUser,
+    public List<KnowledgesEntity> searchKnowledge(String keyword, List<TagsEntity> tags, List<GroupsEntity> groups, 
+            List<UsersEntity> creators, String[] templates, LoginedUser loginedUser,
             Integer offset, Integer limit) throws Exception {
         SearchingValue searchingValue = new SearchingValue();
         searchingValue.setKeyword(keyword);
@@ -549,9 +551,20 @@ public class KnowledgeLogic {
             }
         }
         // テンプレート指定もユーザに関係なく条件追加
-        if (StringUtils.isNotEmpty(template) && StringUtils.isInteger(template)) {
-            searchingValue.setTemplate(new Integer(template));
+        if (templates != null) {
+            for (String template: templates) {
+                if (StringUtils.isNotEmpty(template) && StringUtils.isInteger(template)) {
+                    searchingValue.addTemplate(new Integer(template));
+                }
+            }
         }
+        
+        if (creators != null) {
+            for (UsersEntity creator : creators) {
+                searchingValue.addCreator(creator.getUserId());
+            }
+        }
+        
         // ログインしてない場合はグループ検索ができないので公開記事のみを対象にして検索する
         if (loginedUser == null) {
             searchingValue.addUser(ALL_USER);
@@ -608,7 +621,7 @@ public class KnowledgeLogic {
      * @throws Exception
      */
     public List<KnowledgesEntity> searchKnowledge(String keyword, LoginedUser loginedUser, Integer offset, Integer limit) throws Exception {
-        return searchKnowledge(keyword, null, null, null, loginedUser, offset, limit);
+        return searchKnowledge(keyword, null, null, null, null, loginedUser, offset, limit);
     }
 
     /**
@@ -691,11 +704,10 @@ public class KnowledgeLogic {
 
     /**
      * 指定ユーザのナレッジを取得
-     * 
-     * @param userId
+     * @param targetUser
      * @param loginedUser
-     * @param i
-     * @param pageLimit
+     * @param offset
+     * @param limit
      * @return
      * @throws Exception
      */
@@ -721,7 +733,7 @@ public class KnowledgeLogic {
                 }
             }
         }
-        searchingValue.setCreator(targetUser);
+        searchingValue.addCreator(targetUser);
 
         return searchKnowledge(searchingValue);
     }
@@ -1102,7 +1114,7 @@ public class KnowledgeLogic {
         ViewHistoriesDao historiesDao = ViewHistoriesDao.get();
         ViewHistoriesEntity historiesEntity = new ViewHistoriesEntity();
         historiesEntity.setKnowledgeId(knowledgeId);
-        historiesEntity.setViewDateTime(new Timestamp(new Date().getTime()));
+        historiesEntity.setViewDateTime(new Timestamp(DateUtils.now().getTime()));
         if (loginedUser != null) {
             historiesEntity.setInsertUser(loginedUser.getUserId());
         } else {
@@ -1120,87 +1132,6 @@ public class KnowledgeLogic {
             KnowledgesDao.get().updateViewCount(count, knowledgeId);
         }
     }
-    
-    /**
-     * イイネの重複チェックを行うかをシステム設定情報から取得
-     * @return
-     */
-    private boolean getCheckOfLike() {
-        boolean check = false;
-        SystemConfigsEntity config = SystemConfigsDao.get().selectOnKey(SystemConfig.LIKE_CONFIG, AppConfig.get().getSystemName());
-        if (config != null) {
-            if (SystemConfig.LIKE_CONFIG_ONLY_ONE.equals(config.getConfigValue())) {
-                check = true;
-            }
-        }
-        return check;
-    }
-    /**
-     * いいね！を追加
-     * 
-     * @param knowledgeId
-     * @param loginedUser
-     * @return
-     * @throws InvalidParamException 
-     */
-    public Long addLike(Long knowledgeId, LoginedUser loginedUser, Locale locale) throws InvalidParamException {
-        if (getCheckOfLike()) {
-            Resources resources = Resources.getInstance(locale);
-            if (loginedUser == null || loginedUser.getUserId().equals(Integer.MIN_VALUE)) {
-                throw new InvalidParamException(new MessageResult(
-                        MessageStatus.Warning, HttpStatus.SC_403_FORBIDDEN, resources.getResource("knowledge.likes.required.signin"), ""));
-            }
-            LikesEntity likesEntity = LikesDao.get().selectExistsOnUser(knowledgeId, loginedUser.getUserId());
-            if (likesEntity != null) {
-                throw new InvalidParamException(new MessageResult(
-                        MessageStatus.Warning, HttpStatus.SC_403_FORBIDDEN, resources.getResource("knowledge.likes.duplicate"), ""));
-            }
-        }
-        LikesDao likesDao = LikesDao.get();
-        LikesEntity likesEntity = new LikesEntity();
-        likesEntity.setKnowledgeId(knowledgeId);
-        likesDao.insert(likesEntity);
-
-        updateKnowledgeExInfo(knowledgeId);
-
-        Long count = likesDao.countOnKnowledgeId(knowledgeId);
-
-        // 通知
-        NotifyLogic.get().notifyOnKnowledgeLiked(knowledgeId, likesEntity);
-
-        return count;
-    }
-    /**
-     * コメントにイイネを追加
-     * @param commentNo
-     * @param loginedUser
-     * @return
-     * @throws InvalidParamException 
-     */
-    public Long addLikeComment(Long commentNo, LoginedUser loginedUser, Locale locale) throws InvalidParamException {
-        if (getCheckOfLike()) {
-            Resources resources = Resources.getInstance(locale);
-            if (loginedUser == null || loginedUser.getUserId().equals(Integer.MIN_VALUE)) {
-                throw new InvalidParamException(new MessageResult(
-                        MessageStatus.Warning, HttpStatus.SC_403_FORBIDDEN, resources.getResource("knowledge.likes.required.signin"), ""));
-            }
-            LikeCommentsEntity like = LikeCommentsDao.get().selectExistsOnUser(commentNo, loginedUser.getUserId());
-            if (like != null) {
-                throw new InvalidParamException(new MessageResult(
-                        MessageStatus.Warning, HttpStatus.SC_403_FORBIDDEN, resources.getResource("knowledge.likes.duplicate"), ""));
-            }
-        }
-        LikeCommentsEntity like = new LikeCommentsEntity();
-        like.setCommentNo(commentNo);
-        like = LikeCommentsDao.get().insert(like);
-        Long count = LikeCommentsDao.get().selectOnCommentNo(commentNo);
-        
-        // 通知
-        NotifyLogic.get().notifyOnCommentLiked(like);
-
-        return count;
-    }
-    
 
     /**
      * ナレッジテーブルの タグやイイネ件数、コメント件数などの付加情報を 更新する（一覧表示用）
@@ -1272,6 +1203,9 @@ public class KnowledgeLogic {
 
         // 通知
         NotifyLogic.get().notifyOnKnowledgeComment(knowledgeId, commentsEntity);
+        
+        //ポイント
+        ActivityLogic.get().processActivity(Activity.COMMENT_INSERT, loginedUser, DateUtils.now(), commentsEntity);
         
         return commentsEntity;
     }
@@ -1484,17 +1418,17 @@ public class KnowledgeLogic {
     }
 
     /**
-     * 一定期間で、「イイネ」の件数が多いものを一覧で取得 （イイネの件数が多い順で並べる）
+     * 一定期間で人気の高い記事を並べる
      * 
      * 
      * @param loginedUser
      * @return
      */
     public List<KnowledgesEntity> getPopularityKnowledges(LoginedUser loginedUser, int offset, int limit) {
-        long now = new Date().getTime();
+        long now = DateUtils.now().getTime();
         LOG.trace(now);
 
-        long term = 1000L * 60L * 60L * 24L * 30L;
+        long term = 1000L * 60L * 60L * 24L * 5L; // 5日間の中でCPの合計が高いものにする
         LOG.trace(term);
         long s = now - term;
         LOG.trace(s);

@@ -1,8 +1,5 @@
 package org.support.project.knowledge.control.api;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.support.project.common.util.PropertyUtil;
 import org.support.project.common.util.StringUtils;
 import org.support.project.di.DI;
@@ -19,17 +16,19 @@ import org.support.project.knowledge.vo.api.User;
 import org.support.project.web.bean.ApiParams;
 import org.support.project.web.boundary.Boundary;
 import org.support.project.web.common.HttpStatus;
-import org.support.project.web.control.ApiControl;
+import org.support.project.web.control.GetApiControl;
 import org.support.project.web.control.service.Get;
 import org.support.project.web.entity.GroupsEntity;
-import org.support.project.web.entity.UsersEntity;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @DI(instance = Instance.Prototype)
-public class GroupsControl extends ApiControl {
+public class GroupsControl extends GetApiControl {
     /**
      * List groups
      */
-    @Get(path="api/groups")
+    @Get(path="api/groups", publishToken="")
     public Boundary index() {
         return get();
     }

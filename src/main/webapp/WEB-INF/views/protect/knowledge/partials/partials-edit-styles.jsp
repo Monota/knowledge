@@ -16,12 +16,15 @@
 <link rel="stylesheet" href="<%= request.getContextPath() %>/bower/picEdit/dist/css/picedit.min.css" />
 <link rel="stylesheet" href="<%= request.getContextPath() %>/bower/bootstrap-datepicker/dist/css/bootstrap-datepicker3.min.css" />
 <link rel="stylesheet" href="<%= request.getContextPath() %>/bower/clockpicker/dist/bootstrap-clockpicker.min.css" />
+<link rel="stylesheet" href="<%= request.getContextPath() %>/bower/animate.css/animate.min.css" />
 
 <link rel="stylesheet" href="<%= request.getContextPath() %>/css/template.css" />
 <link rel="stylesheet" href="<%= request.getContextPath() %>/css/knowledge-edit.css" />
 <link rel="stylesheet" href="<%= request.getContextPath() %>/css/markdown.css" />
 <link rel="stylesheet" href="<%= request.getContextPath() %>/css/slide.css" />
 <!-- endbuild -->
+
+<link rel="stylesheet" href="<%= request.getContextPath() %>/css/presentation-thema/default.css" />
 
 <style>
 <%-- width の上書き --%>
